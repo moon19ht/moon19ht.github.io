@@ -123,7 +123,7 @@ moon19ht.github.io/
 ├── package-lock.json          # 정확한 의존성 버전 lock
 └── next-env.d.ts              # Next.js TypeScript 환경 선언
 
-````
+```
 
 > ✨ 컴포넌트와 레이아웃은 **다크 모드 전환 (`ThemeProvider`)** 및
 > **검색 기능(`SearchInput + filtering`)** 확장을 염두에 두고 설계되어 있습니다.
@@ -166,8 +166,6 @@ npm run build && npm run export
 ```
 
 > 결과물(`/out`)을 `/docs`로 복사 → GitHub Pages에서 `/docs` 선택
-
----
 
 ---
 
