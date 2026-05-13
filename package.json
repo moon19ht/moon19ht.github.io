@@ -1,0 +1,29 @@
+{
+  "name": "moon19ht-portfolio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "remotion:still": "remotion still remotion/index.ts Moon19htHero public/media/hero-still.png --frame=90",
+    "remotion:render:mp4": "remotion render remotion/index.ts Moon19htHero public/media/hero-reel.mp4 --codec=h264",
+    "remotion:render:webm": "remotion render remotion/index.ts Moon19htHero public/media/hero-reel.webm --codec=vp8",
+    "render:media": "npm run remotion:still && npm run remotion:render:mp4 && npm run remotion:render:webm"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.365",
+    "@vitejs/plugin-react": "^5.0.4",
+    "framer-motion": "^12.23.24",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "remotion": "^4.0.365",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
+  }
+}
