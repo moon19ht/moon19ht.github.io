@@ -6,3 +6,7 @@ dist/
 .DS_Store
 npm-debug.log*
 *.local
+
+# Local analysis and security reports
+ownership-map-out/
+security_best_practices_report.md
