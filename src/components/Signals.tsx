@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { Profile } from '../content/profile';
 
 type SignalsProps = {
@@ -6,6 +6,8 @@ type SignalsProps = {
 };
 
 export function Signals({ signals }: SignalsProps) {
+  const shouldReduceMotion = useReducedMotion();
+
   return (
     <section className="section signals" id="signals" aria-labelledby="signals-title">
       <div className="section__kicker">Selected signals</div>
@@ -19,11 +21,14 @@ export function Signals({ signals }: SignalsProps) {
           <motion.article
             className="signal"
             key={signal.label}
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 28 }}
+            whileInView={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
             viewport={{ once: true, amount: 0.4 }}
-            transition={{ duration: 0.62, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
-            tabIndex={0}
+            transition={
+              shouldReduceMotion
+                ? undefined
+                : { duration: 0.62, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }
+            }
           >
             <span className="signal__index">0{index + 1}</span>
             <div>

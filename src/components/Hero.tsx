@@ -1,4 +1,5 @@
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { useState } from 'react';
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import type { Profile } from '../content/profile';
 
 type HeroProps = {
@@ -6,25 +7,39 @@ type HeroProps = {
 };
 
 export function Hero({ profile }: HeroProps) {
+  const [videoFailed, setVideoFailed] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
   const { scrollYProgress } = useScroll();
   const videoScale = useTransform(scrollYProgress, [0, 0.32], [1, 1.08]);
   const videoOpacity = useTransform(scrollYProgress, [0, 0.28], [1, 0.46]);
+  const showVideo = !shouldReduceMotion && !videoFailed;
 
   return (
     <section className="hero" aria-labelledby="hero-title">
-      <motion.div className="hero__media" style={{ scale: videoScale, opacity: videoOpacity }}>
-        <video
-          className="hero__video"
-          autoPlay
-          muted
-          loop
-          playsInline
-          poster="/media/hero-still.png"
-          aria-hidden="true"
-        >
-          <source src="/media/hero-reel.webm" type="video/webm" />
-          <source src="/media/hero-reel.mp4" type="video/mp4" />
-        </video>
+      <a className="skip-link" href="#signals">
+        Skip to content
+      </a>
+
+      <motion.div
+        className="hero__media"
+        style={shouldReduceMotion ? undefined : { scale: videoScale, opacity: videoOpacity }}
+      >
+        {showVideo ? (
+          <video
+            className="hero__video"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            poster="/media/hero-still.png"
+            aria-hidden="true"
+            onError={() => setVideoFailed(true)}
+          >
+            <source src="/media/hero-reel.webm" type="video/webm" />
+            <source src="/media/hero-reel.mp4" type="video/mp4" />
+          </video>
+        ) : null}
         <div className="hero__fallback" aria-hidden="true" />
       </motion.div>
       <div className="hero__shade" />
@@ -35,6 +50,8 @@ export function Hero({ profile }: HeroProps) {
         </a>
         <div className="site-nav__links">
           <a href="#signals">Signals</a>
+          <a href="#projects">Projects</a>
+          <a href="#toolchain">Toolchain</a>
           <a href="#rhythm">Rhythm</a>
           <a href="#contact">Contact</a>
         </div>

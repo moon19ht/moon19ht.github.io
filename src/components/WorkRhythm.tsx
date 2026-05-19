@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { Profile } from '../content/profile';
 
 type WorkRhythmProps = {
@@ -7,10 +7,12 @@ type WorkRhythmProps = {
 };
 
 export function WorkRhythm({ rhythm, contact }: WorkRhythmProps) {
+  const shouldReduceMotion = useReducedMotion();
+
   return (
     <>
       <section className="section rhythm" id="rhythm" aria-labelledby="rhythm-title">
-        <div className="section__kicker">Work rhythm</div>
+        <div className="section__kicker">Build loop</div>
         <div className="rhythm__grid">
           <h2 id="rhythm-title">Prototype. Verify. Ship.</h2>
           <div className="rhythm__steps">
@@ -18,14 +20,25 @@ export function WorkRhythm({ rhythm, contact }: WorkRhythmProps) {
               <motion.div
                 className="rhythm__step"
                 key={item.step}
-                initial={{ opacity: 0, x: 30 }}
-                whileInView={{ opacity: 1, x: 0 }}
+                initial={shouldReduceMotion ? false : { opacity: 0, x: 30 }}
+                whileInView={shouldReduceMotion ? undefined : { opacity: 1, x: 0 }}
                 viewport={{ once: true, amount: 0.5 }}
-                transition={{ duration: 0.55, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                transition={
+                  shouldReduceMotion
+                    ? undefined
+                    : { duration: 0.55, delay: index * 0.1, ease: [0.22, 1, 0.36, 1] }
+                }
               >
                 <span>{String(index + 1).padStart(2, '0')}</span>
-                <h3>{item.step}</h3>
-                <p>{item.text}</p>
+                <div>
+                  <h3>{item.step}</h3>
+                  <p>{item.text}</p>
+                  <ul className="rhythm__points">
+                    {item.points.map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                  </ul>
+                </div>
               </motion.div>
             ))}
           </div>
@@ -41,7 +54,7 @@ export function WorkRhythm({ rhythm, contact }: WorkRhythmProps) {
           <p>{contact.text}</p>
           <div className="contact__links">
             {contact.links.map((link) => (
-              <a href={link.href} key={link.label}>
+              <a href={link.href} key={link.label} aria-label={`Contact: ${link.label}`}>
                 {link.label}
               </a>
             ))}
