@@ -9,40 +9,32 @@ export function Toolchain({ toolchain }: ToolchainProps) {
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <section className="section toolchain" id="toolchain" aria-labelledby="toolchain-title">
-      <div className="section__kicker">Toolchain</div>
-      <div className="section__intro">
-        <h2 id="toolchain-title">반복 가능한 빌드 루프를 위한 도구들.</h2>
-        <p>
-          화려한 목록보다 실제로 검증, 자동화, 배포에 쓰는 도구를 기준으로 정리했습니다.
-        </p>
-      </div>
+    <section className="dashboard-section toolchain" id="toolchain" aria-labelledby="toolchain-title">
+      <header className="section-label">
+        <span>03</span>
+        <h2 id="toolchain-title">Toolchain</h2>
+      </header>
 
       <div className="toolchain__grid">
         {toolchain.map((category, index) => (
           <motion.article
-            className="toolchain-card"
+            className="toolchain-group"
             key={category.title}
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 28 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
             whileInView={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.25 }}
+            viewport={{ once: true, amount: 0.55 }}
             transition={
               shouldReduceMotion
                 ? undefined
-                : { duration: 0.56, delay: index * 0.06, ease: [0.22, 1, 0.36, 1] }
+                : { duration: 0.46, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }
             }
           >
-            <div className="toolchain-card__header">
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <h3>{category.title}</h3>
-            </div>
-            <p className="toolchain-card__focus">{category.focus}</p>
-
-            <ul className="toolchain-card__items">
+            <h3>{category.title}</h3>
+            <p className="sr-only">{category.focus}</p>
+            <ul>
               {category.items.map((item) => (
-                <li key={item.name}>
-                  <span>{item.name}</span>
-                  <p>{item.why}</p>
+                <li key={item.name} title={item.why}>
+                  {item.name}
                 </li>
               ))}
             </ul>
