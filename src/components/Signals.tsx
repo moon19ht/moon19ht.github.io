@@ -9,32 +9,29 @@ export function Signals({ signals }: SignalsProps) {
   const shouldReduceMotion = useReducedMotion();
 
   return (
-    <section className="section signals" id="signals" aria-labelledby="signals-title">
-      <div className="section__kicker">Selected signals</div>
-      <div className="section__intro">
-        <h2 id="signals-title">기술은 결과보다 먼저 흐름을 바꿔야 한다.</h2>
-        <p>Minimal proof points for the way Moon19ht builds: systems, automation, and motion.</p>
-      </div>
+    <section className="dashboard-section signals" id="signals" aria-labelledby="signals-title">
+      <header className="section-label">
+        <span>01</span>
+        <h2 id="signals-title">Signals</h2>
+      </header>
 
       <div className="signal-list">
         {signals.map((signal, index) => (
           <motion.article
             className="signal"
             key={signal.label}
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 28 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
             whileInView={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.4 }}
+            viewport={{ once: true, amount: 0.55 }}
             transition={
               shouldReduceMotion
                 ? undefined
-                : { duration: 0.62, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }
+                : { duration: 0.5, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }
             }
           >
-            <span className="signal__index">0{index + 1}</span>
-            <div>
-              <h3>{signal.label}</h3>
-              <p>{signal.value}</p>
-            </div>
+            <span className="signal__index">{String(index + 1).padStart(2, '0')}</span>
+            <h3>{signal.label}</h3>
+            <p>{signal.value}</p>
             <span className="signal__detail">{signal.detail}</span>
           </motion.article>
         ))}
