@@ -10,3 +10,6 @@ minify = "on_release"
 [serve]
 addresses = ["127.0.0.1"]
 port = 8080
+
+[watch]
+ignore = ["motion/node_modules", "motion/out"]

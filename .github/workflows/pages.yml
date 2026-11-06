@@ -28,6 +28,8 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Test
         run: cargo test --locked
+      - name: Test motion loop
+        run: node --test motion/orbits.test.mjs
       - name: Install Trunk
         env:
           TRUNK_VERSION: 0.22.1

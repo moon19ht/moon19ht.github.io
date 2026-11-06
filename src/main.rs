@@ -1,4 +1,6 @@
 mod model;
+mod motion;
+mod photo;
 mod ui;
 
 fn main() {

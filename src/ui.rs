@@ -1,4 +1,5 @@
 use crate::model::{FeedState, MAX_CHARS};
+use crate::motion::MotionGraphic;
 use leptos::{html, prelude::*};
 
 const STORAGE_KEY: &str = "orbit.feed.v1";
@@ -31,10 +32,57 @@ struct AppState {
     following: RwSignal<bool>,
     notice: RwSignal<String>,
     draft: RwSignal<String>,
+    draft_photo: RwSignal<Option<String>>,
+    photo_loading: RwSignal<bool>,
+    warning: RwSignal<String>,
+    saved_snapshot: StoredValue<Option<String>>,
+    can_save: bool,
     composer: NodeRef<html::Textarea>,
 }
 
 impl AppState {
+    fn save(self, change: impl FnOnce(&mut FeedState) -> Result<(), String>) -> Result<(), String> {
+        let result = (|| {
+            if !self.can_save {
+                return Err("브라우저 저장 공간을 사용할 수 없습니다. 기존 데이터와 작성 중인 내용은 변경하지 않았습니다.".into());
+            }
+            let mut next = self.feed.get_untracked();
+            change(&mut next)?;
+            let json =
+                serde_json::to_string(&next).map_err(|_| "저장할 내용을 만들 수 없습니다.")?;
+            if json.len() > MAX_STORAGE_BYTES {
+                return Err("브라우저 저장 한도에 도달했습니다. 기존 사진 게시글을 정리한 뒤 다시 게시해 주세요. 작성 중인 내용은 유지됩니다.".into());
+            }
+            let message = "브라우저 저장 공간이 부족하거나 차단되어 저장하지 못했습니다. 작성 중인 글과 사진은 유지됩니다.";
+            let storage = web_sys::window()
+                .ok_or(message)?
+                .local_storage()
+                .map_err(|_| message)?
+                .ok_or(message)?;
+            // shortcut: optimistic tab check; use Web Locks to coordinate simultaneous writers.
+            if storage.get_item(STORAGE_KEY).map_err(|_| message)?
+                != self.saved_snapshot.get_value()
+            {
+                return Err("다른 탭에서 데이터가 변경되어 저장을 멈췄습니다. 작성 중인 내용을 보관한 뒤 새로고침해 주세요.".into());
+            }
+            // Commit browser storage first so a failed write never consumes a draft.
+            storage.set_item(STORAGE_KEY, &json).map_err(|_| message)?;
+            self.saved_snapshot.set_value(Some(json));
+            self.feed.set(next);
+            Ok(())
+        })();
+        self.warning
+            .set(result.as_ref().err().cloned().unwrap_or_default());
+        result
+    }
+
+    fn change(self, change: impl FnOnce(&mut FeedState)) {
+        let _ = self.save(|feed| {
+            change(feed);
+            Ok(())
+        });
+    }
+
     fn navigate(self, page: Page) {
         self.page.set(page);
         self.query.set(String::new());
@@ -82,7 +130,7 @@ fn load_feed() -> (FeedState, String, bool, Option<String>) {
         Ok((feed, snapshot)) => (feed, String::new(), true, snapshot),
         Err(()) => (
             FeedState::default(),
-            "저장 공간을 읽을 수 없어 임시 모드로 열었습니다. 기존 데이터는 유지되며, 이번 변경은 새로고침하면 사라집니다.".into(),
+            "저장 공간을 읽을 수 없어 보기 전용으로 열었습니다. 기존 데이터는 유지됩니다.".into(),
             false,
             None,
         ),
@@ -101,45 +149,14 @@ pub fn App() -> impl IntoView {
         following: RwSignal::new(false),
         notice: RwSignal::new(String::new()),
         draft: RwSignal::new(String::new()),
+        draft_photo: RwSignal::new(None),
+        photo_loading: RwSignal::new(false),
+        warning,
+        saved_snapshot,
+        can_save,
         composer: NodeRef::new(),
     };
     provide_context(state);
-
-    // shortcut: browser-only persistence; add a shared backend for real multi-user accounts.
-    Effect::watch(
-        move || state.feed.get(),
-        move |feed, _, _| {
-            if !can_save {
-                return;
-            }
-            let saved = (|| {
-                let message = "저장할 공간이 부족하거나 차단되어 있습니다. 이번 변경은 새로고침하면 사라질 수 있습니다.";
-                let json = serde_json::to_string(feed).map_err(|_| message)?;
-                if json.len() > MAX_STORAGE_BYTES {
-                    return Err(message);
-                }
-                let storage = web_sys::window()
-                    .ok_or(message)?
-                    .local_storage()
-                    .map_err(|_| message)?
-                    .ok_or(message)?;
-                if storage.get_item(STORAGE_KEY).map_err(|_| message)? != saved_snapshot.get_value()
-                {
-                    return Err(
-                        "다른 탭에서 데이터가 변경되어 저장을 멈췄습니다. 이번에 작성한 내용을 복사한 뒤 새로고침해 주세요.",
-                    );
-                }
-                storage.set_item(STORAGE_KEY, &json).map_err(|_| message)?;
-                saved_snapshot.set_value(Some(json));
-                Ok(())
-            })();
-            warning.set(match saved {
-                Err(message) => message.into(),
-                Ok(()) => String::new(),
-            });
-        },
-        false,
-    );
 
     view! {
         <a class="skip-link" href="#main-content">"피드로 바로가기"</a>
@@ -174,6 +191,7 @@ pub fn App() -> impl IntoView {
                         <p class="profile-stats">{move || format!("게시글 {}  ·  팔로잉 {}", state.feed.with(|feed| feed.posts.iter().filter(|post| post.own).count()), state.feed.with(|feed| feed.following.len()))}</p>
                         <p class="muted">"브라우저 저장 데모입니다. 글과 반응은 이 브라우저에만 저장되며, 브라우저 데이터를 삭제하면 사라집니다."</p>
                     </section>
+                    <MotionGraphic/>
                 </Show>
                 <Feed/>
             </main>
@@ -207,14 +225,15 @@ fn Sidebar() -> impl IntoView {
 fn Composer() -> impl IntoView {
     let state = expect_context::<AppState>();
     let body = state.draft;
+    let file_input = NodeRef::<html::Input>::new();
     let count = move || body.with(|text| text.chars().count());
     view! {
         <form class="composer" on:submit=move |event| {
             event.prevent_default();
-            let mut result = Ok(());
-            state.feed.update(|feed| result = feed.publish(&body.get_untracked()));
+            if state.photo_loading.get_untracked() { return; }
+            let result = state.save(|feed| feed.publish(&body.get_untracked(), state.draft_photo.get_untracked()));
             match result {
-                Ok(()) => { body.set(String::new()); state.following.set(false); state.notice.set("새 이야기를 게시했습니다.".into()); }
+                Ok(()) => { body.set(String::new()); state.draft_photo.set(None); state.following.set(false); state.notice.set("새 이야기를 브라우저에 저장했습니다.".into()); }
                 Err(error) => state.notice.set(error),
             }
         }>
@@ -222,11 +241,38 @@ fn Composer() -> impl IntoView {
             <div class="composer-body">
                 <label class="sr-only" for="post-body">"새 게시글"</label>
                 <textarea id="post-body" node_ref=state.composer placeholder="지금 무슨 생각을 하고 있나요?" rows="2" prop:value=move || body.get() on:input=move |event| body.set(event_target_value(&event)) aria-describedby="post-limit"/>
+                <input node_ref=file_input type="file" accept="image/jpeg,image/png,image/webp" aria-label="첨부할 사진 선택" hidden disabled=move || state.photo_loading.get() on:change=move |event| {
+                    let input: web_sys::HtmlInputElement = event_target(&event);
+                    let file = input.files().and_then(|files| files.get(0));
+                    input.set_value("");
+                    if let Some(file) = file {
+                        state.photo_loading.set(true);
+                        state.notice.set(String::new());
+                        leptos::task::spawn_local(async move {
+                            let result = crate::photo::prepare_photo(file).await;
+                            state.photo_loading.set(false);
+                            match result {
+                                Ok(photo) => { state.draft_photo.set(Some(photo)); state.notice.set("사진을 준비했습니다. 게시하면 이 브라우저에 저장됩니다.".into()); }
+                                Err(message) => state.notice.set(message),
+                            }
+                        });
+                    }
+                }/>
+                <Show when=move || state.draft_photo.with(Option::is_some)>
+                    <figure class="draft-photo">
+                        <img src=move || state.draft_photo.get().unwrap_or_default() alt="게시할 사진 미리보기"/>
+                        <button class="remove-photo" type="button" aria-label="첨부 사진 제거" disabled=move || state.photo_loading.get() on:click=move |_| { state.draft_photo.set(None); state.notice.set("첨부 사진을 제거했습니다.".into()); }><Icon name="close"/></button>
+                        <figcaption>"미리보기 · 자동 압축된 사진"</figcaption>
+                    </figure>
+                </Show>
+                <Show when=move || state.photo_loading.get()><p class="photo-processing" role="status"><span class="processing-dot"/>"사진을 준비하고 있어요…"</p></Show>
                 <div class="composer-footer">
+                    <button class="attach-photo" type="button" disabled=move || state.photo_loading.get() on:click=move |_| { if let Some(input) = file_input.get() { input.click(); } } aria-label=move || if state.draft_photo.with(Option::is_some) { "첨부 사진 교체" } else { "사진 첨부" }><Icon name="image"/><span>{move || if state.draft_photo.with(Option::is_some) { "교체" } else { "사진" }}</span></button>
                     <span class="composer-note">"나의 우주에 이야기를 남겨보세요."</span>
                     <span class="character-count" id="post-limit" class:over-limit=move || { count() > MAX_CHARS } hidden=move || count() == 0>{move || format!("{}/{}", count(), MAX_CHARS)}</span>
-                    <button class="primary-button" type="submit" disabled=move || { body.with(|text| text.trim().is_empty()) || count() > MAX_CHARS }>"게시하기"</button>
+                    <button class="primary-button" type="submit" disabled=move || { state.photo_loading.get() || (body.with(|text| text.trim().is_empty()) && state.draft_photo.with(Option::is_none)) || count() > MAX_CHARS }>"게시하기"</button>
                 </div>
+                <p class="photo-help">"사진 1장 · JPG/PNG/WebP · 최대 10MB · 이 브라우저에만 저장"</p>
             </div>
         </form>
     }
@@ -304,29 +350,29 @@ fn PostCard(id: u64) -> impl IntoView {
                         <p>"이 게시글과 답글을 삭제할까요? 삭제하면 복구할 수 없습니다."</p>
                         <button on:click=move |_| deleting.set(false)>"취소"</button>
                         <button class="confirm-delete" on:click=move |_| {
-                            state.feed.update(|feed| { feed.remove_post(id); });
-                            state.notice.set("내 게시글을 삭제했습니다.".into());
+                            if state.save(|feed| { feed.remove_post(id); Ok(()) }).is_ok() {
+                                state.notice.set("내 게시글을 삭제했습니다.".into());
+                            }
                         }>"삭제"</button>
                     </div>
                 </Show>
                 <p class="post-body">{initial.body}</p>
-                {initial.image.map(|src| view! { <img class="post-media" src=src alt="초록 나무 사이로 햇빛과 잎 그림자가 드리운 콘크리트 건축물" width="960" height="540"/> })}
+                {initial.image.map(|src| view! { <img class="post-media" class:uploaded=initial.own src=src alt=if initial.own { "Moon님이 첨부한 사진" } else { "초록 나무 사이로 햇빛과 잎 그림자가 드리운 콘크리트 건축물" } width="960" height="540"/> })}
                 {(initial.handle == "junho_dev").then(|| view! {
                     <a class="link-preview" href="https://book.leptos.dev/" target="_blank" rel="noopener noreferrer"><Icon name="code"/><span><strong>"Rust와 Leptos로 만드는 작은 웹앱"</strong><small>"book.leptos.dev"</small></span><Icon name="arrow"/></a>
                 })}
                 <div class="post-actions">
                     <button class="action-button" class:is-active=move || replying.get() aria-label=format!("{}에게 답글", author) title="답글" aria-expanded=move || (replying.get()).to_string() on:click=move |_| replying.update(|value| *value = !*value)><Icon name="message"/><span>{move || current.with(|post| post.as_ref().map_or(0, |post| post.replies.len()))}</span></button>
-                    <button class="action-button repost-action" class:is-active=move || current.with(|post| post.as_ref().is_some_and(|post| post.reposted)) aria-label="재게시" title="재게시" aria-pressed=move || (current.with(|post| post.as_ref().is_some_and(|post| post.reposted))).to_string() on:click=move |_| state.feed.update(|feed| feed.toggle_repost(id))><Icon name="repeat"/><span>{move || current.with(|post| post.as_ref().map_or(0, |post| post.reposts))}</span></button>
-                    <button class="action-button like-action" class:is-active=move || current.with(|post| post.as_ref().is_some_and(|post| post.liked)) aria-label="좋아요" title="좋아요" aria-pressed=move || (current.with(|post| post.as_ref().is_some_and(|post| post.liked))).to_string() on:click=move |_| state.feed.update(|feed| feed.toggle_like(id))><Icon name="heart"/><span>{move || current.with(|post| post.as_ref().map_or(0, |post| post.likes))}</span></button>
-                    <button class="action-button bookmark-action" class:is-active=move || current.with(|post| post.as_ref().is_some_and(|post| post.bookmarked)) aria-label="북마크 저장" title="북마크 저장" aria-pressed=move || (current.with(|post| post.as_ref().is_some_and(|post| post.bookmarked))).to_string() on:click=move |_| state.feed.update(|feed| feed.toggle_bookmark(id))><Icon name="bookmark"/></button>
+                    <button class="action-button repost-action" class:is-active=move || current.with(|post| post.as_ref().is_some_and(|post| post.reposted)) aria-label="재게시" title="재게시" aria-pressed=move || (current.with(|post| post.as_ref().is_some_and(|post| post.reposted))).to_string() on:click=move |_| state.change(|feed| feed.toggle_repost(id))><Icon name="repeat"/><span>{move || current.with(|post| post.as_ref().map_or(0, |post| post.reposts))}</span></button>
+                    <button class="action-button like-action" class:is-active=move || current.with(|post| post.as_ref().is_some_and(|post| post.liked)) aria-label="좋아요" title="좋아요" aria-pressed=move || (current.with(|post| post.as_ref().is_some_and(|post| post.liked))).to_string() on:click=move |_| state.change(|feed| feed.toggle_like(id))><Icon name="heart"/><span>{move || current.with(|post| post.as_ref().map_or(0, |post| post.likes))}</span></button>
+                    <button class="action-button bookmark-action" class:is-active=move || current.with(|post| post.as_ref().is_some_and(|post| post.bookmarked)) aria-label="북마크 저장" title="북마크 저장" aria-pressed=move || (current.with(|post| post.as_ref().is_some_and(|post| post.bookmarked))).to_string() on:click=move |_| state.change(|feed| feed.toggle_bookmark(id))><Icon name="bookmark"/></button>
                 </div>
                 <Show when=move || replying.get()>
                     <div class="reply-panel">
                         <div class="reply-list">{move || current.with(|post| post.as_ref().map(|post| post.replies.iter().map(|reply| view! {<div class="reply"><strong>"Moon "</strong><span>{reply.body.clone()}</span></div>}).collect_view()))}</div>
                         <form class="reply-form" on:submit=move |event| {
                             event.prevent_default();
-                            let mut result = Ok(());
-                            state.feed.update(|feed| result = feed.reply(id, &reply.get_untracked()));
+                            let result = state.save(|feed| feed.reply(id, &reply.get_untracked()));
                             match result { Ok(()) => { reply.set(String::new()); state.notice.set("답글을 남겼습니다.".into()); }, Err(error) => state.notice.set(error) }
                         }>
                             <label class="sr-only" for=format!("reply-{id}")>"답글 내용"</label>
@@ -355,6 +401,7 @@ fn RightSidebar() -> impl IntoView {
     view! {
         <aside class="right-sidebar" aria-label="발견하기">
             <SearchBox/>
+            <Show when=move || state.page.get() != Page::Profile><MotionGraphic compact=true/></Show>
             <section class="trends"><h2>"지금 이야기하는 것들"</h2><p class="section-caption">"함께 발견하는 새로운 관심사"</p>
                 {[("라이프 · 영감", "#오늘의영감"), ("개발 · 테크", "#Leptos"), ("개발 · 생산성", "#사이드프로젝트"), ("일상 · 기록", "#일상의기록")].into_iter().map(|(category, tag)| view! {
                     <button class="trend" on:click=move |_| state.search(tag.into())><span class="trend-category">{category}</span><strong class="trend-name">{tag}</strong><span class="trend-count">{move || format!("이 공간의 이야기 {}개", state.feed.with(|feed| feed.posts.iter().filter(|post| post.body.to_lowercase().contains(&tag.to_lowercase())).count()))}</span><Icon name="arrow"/></button>
@@ -375,7 +422,7 @@ fn Recommendations() -> impl IntoView {
     view! {
         <section class="recommendations"><h2>"새로운 연결"</h2>
             {[("서연", "seoyeon", "S", "mauve", "디자이너 · 일상과 영감"), ("도윤", "doyun", "D", "sage", "개발자 · 도구와 생산성"), ("준호", "junho_dev", "J", "blue", "개발자 · 작은 웹 실험")].into_iter().map(|(name, handle, initial, tone, bio)| view! {
-                <div class="person"><Avatar initial tone/><div class="person-info"><strong>{name}</strong><small>{bio}</small></div><button class="follow-button" class:is-following=move || state.feed.with(|feed| feed.following.iter().any(|value| value == handle)) aria-label=move || format!("{} {}", name, if state.feed.with(|feed| feed.following.iter().any(|value| value == handle)) { "팔로우 취소" } else { "팔로우" }) aria-pressed=move || (state.feed.with(|feed| feed.following.iter().any(|value| value == handle))).to_string() on:click=move |_| state.feed.update(|feed| feed.toggle_follow(handle))>{move || if state.feed.with(|feed| feed.following.iter().any(|value| value == handle)) { "팔로잉" } else { "팔로우" }}</button></div>
+                <div class="person"><Avatar initial tone/><div class="person-info"><strong>{name}</strong><small>{bio}</small></div><button class="follow-button" class:is-following=move || state.feed.with(|feed| feed.following.iter().any(|value| value == handle)) aria-label=move || format!("{} {}", name, if state.feed.with(|feed| feed.following.iter().any(|value| value == handle)) { "팔로우 취소" } else { "팔로우" }) aria-pressed=move || (state.feed.with(|feed| feed.following.iter().any(|value| value == handle))).to_string() on:click=move |_| state.change(|feed| feed.toggle_follow(handle))>{move || if state.feed.with(|feed| feed.following.iter().any(|value| value == handle)) { "팔로잉" } else { "팔로우" }}</button></div>
             }).collect_view()}
         </section>
     }
@@ -405,6 +452,8 @@ fn Icon(name: &'static str) -> impl IntoView {
         "code" => "m8 5-6 7 6 7m8-14 6 7-6 7M14 3l-4 18",
         "arrow" => "M7 17 17 7M7 7h10v10",
         "trash" => "M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7",
+        "image" => "M3 3h18v18H3ZM3 16l6-6 5 5 3-3 4 4M16 7h.01",
+        "close" => "m6 6 12 12M18 6 6 18",
         _ => "",
     };
     view! { <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d=path/></svg> }

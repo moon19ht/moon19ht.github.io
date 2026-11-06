@@ -1,7 +1,9 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 pub const MAX_CHARS: usize = 280;
+pub const MAX_IMAGE_DATA_URL_BYTES: usize = 350_000;
 const MAX_POSTS: usize = 500;
 const MAX_REPLIES: usize = 100;
 
@@ -128,6 +130,32 @@ fn checked_body(body: &str) -> Result<String, String> {
     Ok(body.into())
 }
 
+fn valid_image(image: &str) -> bool {
+    if image == "/assets/architecture.jpg" {
+        return true;
+    }
+    if image.len() > MAX_IMAGE_DATA_URL_BYTES {
+        return false;
+    }
+    image
+        .strip_prefix("data:image/jpeg;base64,")
+        .and_then(|encoded| STANDARD.decode(encoded).ok())
+        .is_some_and(|bytes| {
+            bytes.starts_with(&[0xff, 0xd8, 0xff]) && bytes.ends_with(&[0xff, 0xd9])
+        })
+}
+
+fn checked_post(body: &str, image: Option<&str>) -> Result<String, String> {
+    if image.is_some_and(|image| !valid_image(image)) {
+        return Err("사진 형식이나 크기를 확인해 주세요.".into());
+    }
+    if image.is_some() && body.trim().is_empty() {
+        Ok(String::new())
+    } else {
+        checked_body(body)
+    }
+}
+
 fn valid_handle(handle: &str) -> bool {
     !handle.is_empty()
         && handle.len() <= 30
@@ -137,8 +165,8 @@ fn valid_handle(handle: &str) -> bool {
 }
 
 impl FeedState {
-    pub fn publish(&mut self, body: &str) -> Result<(), String> {
-        let body = checked_body(body)?;
+    pub fn publish(&mut self, body: &str, image: Option<String>) -> Result<(), String> {
+        let body = checked_post(body, image.as_deref())?;
         if self.posts.len() >= MAX_POSTS {
             return Err(
                 "저장 가능한 게시글 수에 도달했어요. 내 게시글을 정리한 뒤 다시 시도해 주세요."
@@ -165,7 +193,7 @@ impl FeedState {
                 tone: "lavender".into(),
                 body,
                 time: "방금".into(),
-                image: None,
+                image,
                 likes: 0,
                 reposts: 0,
                 liked: false,
@@ -261,13 +289,10 @@ impl FeedState {
                         "mauve" | "sage" | "sand" | "blue" | "lavender"
                     )
                     && post.time.chars().count() <= 50
-                    && checked_body(&post.body).is_ok()
+                    && checked_post(&post.body, post.image.as_deref()).is_ok()
                     && (!post.own || post.handle == "moon19ht")
                     && (!post.liked || post.likes > 0)
                     && (!post.reposted || post.reposts > 0)
-                    && post.image.as_ref().is_none_or(|image| {
-                        image.starts_with("/assets/") && !image.contains("..") && image.len() <= 200
-                    })
                     && post.replies.len() <= MAX_REPLIES
                     && post
                         .replies
@@ -294,11 +319,11 @@ mod tests {
     #[test]
     fn publishing_validates_unicode_length_and_trims_without_mutating_on_error() {
         let mut state = FeedState::default();
-        assert!(state.publish(" \n ").is_err());
-        assert!(state.publish(&"한".repeat(MAX_CHARS + 1)).is_err());
+        assert!(state.publish(" \n ", None).is_err());
+        assert!(state.publish(&"한".repeat(MAX_CHARS + 1), None).is_err());
         assert_eq!(state.posts.len(), 4);
         state
-            .publish(&format!("  {}\n", "한".repeat(MAX_CHARS)))
+            .publish(&format!("  {}\n", "한".repeat(MAX_CHARS)), None)
             .unwrap();
         assert_eq!(state.posts[0].body.chars().count(), MAX_CHARS);
         assert!(state.posts[0].own);
@@ -311,10 +336,10 @@ mod tests {
             next_id: 1,
             ..FeedState::default()
         };
-        state.publish("새로운 이야기").unwrap();
+        state.publish("새로운 이야기", None).unwrap();
         assert_eq!(state.posts[0].id, 5);
         state.next_id = u64::MAX;
-        assert!(state.publish("번호 초과").is_err());
+        assert!(state.publish("번호 초과", None).is_err());
         assert_eq!(state.posts.len(), 5);
     }
 
@@ -336,7 +361,7 @@ mod tests {
         assert_eq!(state.posts[0].reposts, reposts);
         assert!(!state.posts[0].bookmarked);
         assert!(!state.remove_post(1));
-        state.publish("내 글").unwrap();
+        state.publish("내 글", None).unwrap();
         assert!(state.remove_post(5));
         assert_eq!(state.posts.len(), 4);
     }
@@ -367,6 +392,88 @@ mod tests {
         assert!(!state.validate());
         let mut state = FeedState::default();
         state.posts[0].body = " ".into();
+        state.posts[0].image = None;
         assert!(!state.validate());
+    }
+
+    fn jpeg_data_url(bytes: &[u8]) -> String {
+        format!("data:image/jpeg;base64,{}", STANDARD.encode(bytes))
+    }
+
+    #[test]
+    fn image_only_posts_and_existing_text_posts_survive_serialization() {
+        let mut state = FeedState::default();
+        state.publish("기존 글", None).unwrap();
+        let previous: FeedState =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert!(previous.validate());
+        assert_eq!(previous.posts[0].body, "기존 글");
+        assert!(previous.posts[0].image.is_none());
+
+        let image = jpeg_data_url(&[0xff, 0xd8, 0xff, 0xe0, 0, 2, 0xff, 0xd9]);
+        state.publish("  \n ", Some(image.clone())).unwrap();
+        let decoded: FeedState =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert!(decoded.validate());
+        assert_eq!(decoded.posts[0].body, "");
+        assert_eq!(decoded.posts[0].image.as_deref(), Some(image.as_str()));
+        assert_eq!(decoded.posts[1].body, "기존 글");
+        assert!(decoded.posts[0].own);
+    }
+
+    #[test]
+    fn unsafe_or_malformed_images_never_mutate_posts() {
+        let mut state = FeedState::default();
+        let invalid_images = [
+            "https://example.com/photo.jpg",
+            "/assets/photo.svg",
+            "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+            "data:image/png;base64,iVBORw0KGgo=",
+            "data:image/jpeg;base64,",
+            "data:image/jpeg;base64,/9j/@@==",
+            "data:image/jpeg;base64,/9j/2Q==\n",
+            "data:image/jpeg;base64,/9j/2Q===",
+            "data:image/jpeg;base64,PHNjcmlwdD4=",
+        ];
+        for image in invalid_images {
+            assert!(
+                state.publish("사진", Some(image.into())).is_err(),
+                "{image}"
+            );
+            assert_eq!(state.posts.len(), 4);
+            assert_eq!(state.next_id, 5);
+        }
+        let missing_end = jpeg_data_url(&[0xff, 0xd8, 0xff, 0xe0]);
+        assert!(state.publish("사진", Some(missing_end)).is_err());
+        let mut saved = FeedState::default();
+        saved.posts[0].image = Some(invalid_images[2].into());
+        assert!(!saved.validate());
+    }
+
+    #[test]
+    fn image_size_and_body_limits_apply_before_publishing() {
+        let mut state = FeedState::default();
+        let max_binary_size =
+            ((MAX_IMAGE_DATA_URL_BYTES - "data:image/jpeg;base64,".len()) / 4) * 3;
+        let mut bytes = vec![0; max_binary_size];
+        bytes[..3].copy_from_slice(&[0xff, 0xd8, 0xff]);
+        bytes[max_binary_size - 2..].copy_from_slice(&[0xff, 0xd9]);
+        let image = jpeg_data_url(&bytes);
+        assert!(image.len() <= MAX_IMAGE_DATA_URL_BYTES);
+        assert!(
+            state
+                .publish(&"한".repeat(MAX_CHARS + 1), Some(image.clone()))
+                .is_err()
+        );
+        assert_eq!(state.posts.len(), 4);
+        state.publish(&"한".repeat(MAX_CHARS), Some(image)).unwrap();
+        assert!(state.validate());
+
+        bytes.extend_from_slice(&[0, 0xff, 0xd9]);
+        let oversized = jpeg_data_url(&bytes);
+        assert!(oversized.len() > MAX_IMAGE_DATA_URL_BYTES);
+        assert!(state.publish("", Some(oversized)).is_err());
+        assert_eq!(state.posts.len(), 5);
+        assert_eq!(state.next_id, 6);
     }
 }

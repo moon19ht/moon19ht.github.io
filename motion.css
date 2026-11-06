@@ -1,0 +1,40 @@
+.motion-card { margin: 20px; overflow: hidden; border: 1px solid #dfe5d7; border-radius: 14px; background: #f5f8ee; }
+.motion-card.compact { margin: 24px 0 28px; }
+.motion-video, .motion-poster { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; background: #e8efd9; }
+.motion-card figcaption { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 15px 15px; }
+.motion-caption { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.motion-card figcaption strong { font-size: 14px; font-weight: 750; color: #26351c; }
+.motion-card figcaption span { font-size: 12px; line-height: 1.6; color: #606b55; }
+.motion-card figcaption .motion-error { color: #795922; }
+.motion-toggle { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; padding: 9px; border: 1px solid #b7c4a6; border-radius: 50%; color: #42552d; background: transparent; }
+.motion-toggle.is-playing { background: #d3f36b; border-color: #bed65c; }
+.motion-toggle:hover:not(:disabled) { background: #e3edcb; }
+.motion-toggle svg { width: 20px; height: 20px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .post { animation: orbit-post-enter 240ms ease-out both; }
+  .nav-item .icon { transition: transform 160ms ease-out; }
+  .nav-item:hover .icon { transform: translateX(2px); }
+  .brand .orbit-mark { transition: transform 350ms ease; }
+  .brand:hover .orbit-mark { transform: rotate(12deg); }
+  .action-button.is-active .icon { animation: orbit-reaction 260ms ease-out; }
+}
+
+@keyframes orbit-post-enter {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes orbit-reaction {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(1.22); }
+}
+
+@media (max-width: 600px) {
+  .motion-card { margin: 18px 16px; border-radius: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post, .action-button.is-active .icon { animation: none; }
+  .nav-item .icon, .brand .orbit-mark { transition: none; }
+}

@@ -77,6 +77,17 @@ textarea { resize: vertical; }
 .character-count { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .character-count.over-limit { color: #ae3636; font-weight: 700; }
 .composer-footer .primary-button { padding: 8px 17px; font-size: 14px; white-space: nowrap; }
+.attach-photo { display: inline-flex; align-items: center; gap: 5px; padding: 7px 9px; margin-left: -8px; border-radius: 9px; color: #526c1d; font-size: 12px; font-weight: 650; white-space: nowrap; }
+.attach-photo:hover:not(:disabled) { background: #f0f6e3; }
+.attach-photo .icon { width: 21px; height: 21px; }
+.photo-help { margin: 9px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.draft-photo { position: relative; margin: 12px 0 0; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: #f6f8f1; }
+.draft-photo img { display: block; width: 100%; max-height: 280px; object-fit: contain; }
+.draft-photo figcaption { padding: 6px 10px; background: #fff; color: var(--muted); font-size: 11px; }
+.remove-photo { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #d8ddcf; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px #0001; }
+.remove-photo .icon { width: 19px; height: 19px; }
+.photo-processing { display: flex; align-items: center; gap: 8px; color: #526c1d; font-size: 12px; }
+.processing-dot { width: 8px; height: 8px; border-radius: 50%; background: #769533; }
 .feed-label { padding: 16px 20px 12px; font-size: 15px; font-weight: 750; }
 .post { display: flex; gap: 12px; margin: 0 20px; padding: 15px 0 13px; border-bottom: 1px solid var(--line); }
 .post:last-child { border-bottom: 0; }
@@ -92,6 +103,7 @@ textarea { resize: vertical; }
 .post-body { margin: 6px 0 12px; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .post-body a, .hashtag { color: var(--green); }
 .post-media { display: block; width: 100%; height: auto; aspect-ratio: 2.08; object-fit: cover; border-radius: 14px; background: #f1f3ec; border: 1px solid #edf0e8; }
+.post-media.uploaded { aspect-ratio: auto; max-height: 640px; object-fit: contain; }
 .post-actions { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-top: 10px; max-width: 93%; }
 .action-button { display: inline-flex; align-items: center; justify-content: flex-start; gap: 7px; min-width: 47px; min-height: 30px; padding: 3px 4px; color: var(--muted); border-radius: 16px; font-size: 12px; font-variant-numeric: tabular-nums; transition: color .15s, background .15s; }
 .action-button .icon { width: 19px; height: 19px; }
@@ -217,6 +229,8 @@ textarea { resize: vertical; }
   .composer textarea { min-height: 47px; padding: 10px 12px; font-size: 14px; }
   .composer-footer { gap: 6px; flex-wrap: wrap; }
   .composer-note { font-size: 11px; }
+  .composer-footer .composer-note { display: none; }
+  .composer-footer .attach-photo { margin-right: auto; }
   .character-count { font-size: 10px; }
   .composer-footer .primary-button { padding: 8px 13px; font-size: 12px; }
   .feed-label { padding: 16px 16px 5px; font-size: 14px; }
