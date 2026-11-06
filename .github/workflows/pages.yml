@@ -1,0 +1,68 @@
+name: Build and deploy Leptos to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install Rust toolchain
+        run: rustup toolchain install
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --locked
+      - name: Install Trunk
+        env:
+          TRUNK_VERSION: 0.22.1
+        run: |
+          base="https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}"
+          archive="trunk-x86_64-unknown-linux-gnu.tar.gz"
+          curl --fail --location --retry 3 "$base/$archive" --output "$RUNNER_TEMP/$archive"
+          curl --fail --location --retry 3 "$base/$archive.sha256" --output "$RUNNER_TEMP/$archive.sha256"
+          cd "$RUNNER_TEMP"
+          printf '%s  %s\n' "$(cat "$archive.sha256")" "$archive" | sha256sum --check
+          tar -xzf "$archive"
+          install -m 755 trunk "$HOME/.cargo/bin/trunk"
+      - name: Build website
+        run: trunk build --release
+      - name: Configure Pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/configure-pages@v5
+      - name: Upload website
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

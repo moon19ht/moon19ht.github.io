@@ -1,0 +1,12 @@
+trunk-version = "=0.22.1"
+
+[build]
+target = "index.html"
+dist = "dist"
+public_url = "/"
+locked = true
+minify = "on_release"
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8080
